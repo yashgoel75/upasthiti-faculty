@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { Calendar, Clock, BookOpen, User, Phone, Mail, MapPin } from "lucide-react";
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 
+// ================= INTERFACES =================
 
 interface Subject {
   id: string;
@@ -41,7 +42,14 @@ interface ClassDetails {
   section: string;
 }
 
-// Mock data - replace with actual API calls
+// Add a derived type for "Today's Classes"
+interface TodayClass extends TimetableEntry {
+  subject?: Subject;
+  classDetails?: ClassDetails;
+}
+
+// ================= MOCK DATA =================
+
 const mockTeacherData: Teacher = {
   id: "T001",
   name: "Dr. Sonakshi Vij",
@@ -73,7 +81,7 @@ const mockTeacherData: Teacher = {
     },
     {
       id: "TT003",
-      dayOfWeek: ["Monday", "Tuesday","Wednesday"],
+      dayOfWeek: ["Monday", "Tuesday", "Wednesday"],
       startTime: "14:00",
       endTime: "15:00",
       classId: "C003",
@@ -98,16 +106,18 @@ const mockClassDetails: Record<string, ClassDetails> = {
   C003: { id: "C003", branch: "CSE", batchStart: 2022, batchEnd: 2026, section: "C" }
 };
 
+// ================= COMPONENT =================
+
 export default function TeacherDashboard() {
-    const router = useRouter();
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [teacherData, setTeacherData] = useState<Teacher | null>(null);
-  const [todayClasses, setTodayClasses] = useState<any[]>([]);
+  const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDay, setCurrentDay] = useState("");
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user: any) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user?.email) {
         setCurrentUser(user);
         fetchTeacherData(user.email);
@@ -122,28 +132,25 @@ export default function TeacherDashboard() {
   const fetchTeacherData = async (email: string) => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Simulate API delay
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       setTeacherData(mockTeacherData);
-      
-      // Get current day
+
       const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
       const today = days[new Date().getDay()];
       setCurrentDay(today);
-      
-      // Filter today's classes
-      const todaysSchedule = mockTeacherData.timetable
-        .filter(entry => entry.dayOfWeek.includes(today))
-        .map(entry => {
-          const subject = mockTeacherData.subjects.find(s => s.code === entry.subjectCode);
-          const classDetails = mockClassDetails[entry.classId];
-          return {
-            ...entry,
-            subject,
-            classDetails
-          };
-        })
+
+      // Build today's schedule
+      const todaysSchedule: TodayClass[] = mockTeacherData.timetable
+        .filter((entry) => entry.dayOfWeek.includes(today))
+        .map((entry) => ({
+          ...entry,
+          subject: mockTeacherData.subjects.find((s) => s.code === entry.subjectCode),
+          classDetails: mockClassDetails[entry.classId],
+        }))
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
-      
+
       setTodayClasses(todaysSchedule);
     } catch (error) {
       console.error("Error fetching teacher data:", error);
@@ -153,8 +160,10 @@ export default function TeacherDashboard() {
   };
 
   const handleTakeAttendance = (classId: string, subjectCode: string, timetableId: string) => {
-    router.push(`/attendance/${timetableId}/${classId}/${subjectCode}`);    
+    router.push(`/attendance/${timetableId}/${classId}/${subjectCode}`);
   };
+
+  // ================= UI RENDER =================
 
   if (loading) {
     return (
@@ -210,9 +219,14 @@ export default function TeacherDashboard() {
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Subjects Teaching</h3>
             <div className="flex flex-wrap gap-3">
               {teacherData.subjects.map((subject) => (
-                <div key={subject.id} className="bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-200">
+                <div
+                  key={subject.id}
+                  className="bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-200"
+                >
                   <p className="font-medium text-indigo-900">{subject.name}</p>
-                  <p className="text-sm text-indigo-600">{subject.code} • {subject.credits} credits</p>
+                  <p className="text-sm text-indigo-600">
+                    {subject.code} • {subject.credits} credits
+                  </p>
                 </div>
               ))}
             </div>
@@ -236,13 +250,18 @@ export default function TeacherDashboard() {
           ) : (
             <div className="space-y-4">
               {todayClasses.map((classItem) => (
-                <div key={classItem.id} className="border border-gray-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+                <div
+                  key={classItem.id}
+                  className="border border-gray-200 rounded-lg p-5 hover:shadow-md transition-shadow"
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="flex items-center gap-2 text-indigo-600 font-semibold text-lg">
                           <Clock className="w-5 h-5" />
-                          <span>{classItem.startTime} - {classItem.endTime}</span>
+                          <span>
+                            {classItem.startTime} - {classItem.endTime}
+                          </span>
                         </div>
                         {classItem.classroom && (
                           <div className="flex items-center gap-1 text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm">
@@ -251,26 +270,30 @@ export default function TeacherDashboard() {
                           </div>
                         )}
                       </div>
-                      
+
                       <h3 className="text-xl font-bold text-gray-900 mb-2">
                         {classItem.subject?.name}
                       </h3>
-                      
+
                       <div className="flex items-center gap-4 text-gray-600">
                         <span className="font-medium">{classItem.subject?.code}</span>
                         <span>•</span>
                         <span>
-                          {classItem.classDetails?.branch} - Section {classItem.classDetails?.section}
+                          {classItem.classDetails?.branch} - Section{" "}
+                          {classItem.classDetails?.section}
                         </span>
                         <span>•</span>
                         <span>
-                          Batch {classItem.classDetails?.batchStart}-{classItem.classDetails?.batchEnd}
+                          Batch {classItem.classDetails?.batchStart}-
+                          {classItem.classDetails?.batchEnd}
                         </span>
                       </div>
                     </div>
-                    
-                    <button 
-                      onClick={() => handleTakeAttendance(classItem.classId, classItem.subjectCode, classItem.id)}
+
+                    <button
+                      onClick={() =>
+                        handleTakeAttendance(classItem.classId, classItem.subjectCode, classItem.id)
+                      }
                       className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
                     >
                       Take Attendance
@@ -295,7 +318,7 @@ export default function TeacherDashboard() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-xl shadow-lg p-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -307,7 +330,7 @@ export default function TeacherDashboard() {
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white rounded-xl shadow-lg p-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
