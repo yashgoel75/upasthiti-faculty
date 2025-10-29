@@ -1,8 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { Calendar, Clock, BookOpen, User, Phone, Mail, MapPin } from "lucide-react";
+import { onAuthStateChanged, User as FirebaseUser, signOut, getAuth } from "firebase/auth";
+import {
+  Calendar,
+  Clock,
+  BookOpen,
+  User,
+  Phone,
+  Mail,
+  MapPin,
+  LogOut
+} from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 
@@ -56,57 +65,176 @@ const mockTeacherData: Teacher = {
   phone: 9876543210,
   officialEmail: "teacher@example.com",
   subjects: [
-    { id: "S001", name: "Data Structures", code: "CS201", credits: 4 },
-    { id: "S002", name: "Algorithms", code: "CS202", credits: 4 },
-    { id: "S003", name: "Database Systems", code: "CS301", credits: 3 }
+    { id: "S001", name: "Data Mining", code: "AIDS355", credits: 4 },
+    { id: "S002", name: "Data Mining Lab", code: "AIDS305", credits: 2 },
   ],
   timetable: [
     {
       id: "TT001",
-      dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Friday"],
-      startTime: "09:00",
-      endTime: "10:00",
+      dayOfWeek: ["Monday", "Tuesday", "Wednesday"],
+      startTime: "12:20",
+      endTime: "1:10",
       classId: "C001",
-      subjectCode: "CS201",
-      classroom: "Room 301"
+      subjectCode: "AIDS355",
+      classroom: "Room 508",
     },
     {
       id: "TT002",
-      dayOfWeek: ["Tuesday", "Thursday"],
-      startTime: "10:15",
-      endTime: "11:15",
-      classId: "C002",
-      subjectCode: "CS202",
-      classroom: "Room 405"
+      dayOfWeek: ["Thursday"],
+      startTime: "12:20",
+      endTime: "1:10",
+      classId: "C001",
+      subjectCode: "AIDS355",
+      classroom: "Room 412",
     },
     {
       id: "TT003",
-      dayOfWeek: ["Monday", "Tuesday", "Wednesday"],
-      startTime: "14:00",
-      endTime: "15:00",
-      classId: "C003",
-      subjectCode: "CS301",
-      classroom: "Lab 2"
+      dayOfWeek: ["Tuesday"],
+      startTime: "11:30",
+      endTime: "12:20",
+      classId: "C002",
+      subjectCode: "AIDS355",
+      classroom: "Room 504",
+    },
+    {
+      id: "TT003",
+      dayOfWeek: ["Wednesday"],
+      startTime: "2:50",
+      endTime: "3:40",
+      classId: "C002",
+      subjectCode: "AIDS355",
+      classroom: "Room 508",
+    },
+    {
+      id: "TT003",
+      dayOfWeek: ["Thursday", "Friday"],
+      startTime: "2:00",
+      endTime: "2:50",
+      classId: "C002",
+      subjectCode: "AIDS355",
+      classroom: "Room 507",
     },
     {
       id: "TT004",
-      dayOfWeek: ["Friday"],
-      startTime: "11:30",
-      endTime: "12:30",
+      dayOfWeek: ["Thursday"],
+      startTime: "2:00",
+      endTime: "2:50",
+      classId: "C002",
+      subjectCode: "AIDS355",
+      classroom: "Room 508",
+    },
+    {
+      id: "TT005",
+      dayOfWeek: ["Wednesday"],
+      startTime: "3:40",
+      endTime: "5:20",
       classId: "C001",
-      subjectCode: "CS201",
-      classroom: "Room 301"
-    }
-  ]
+      subjectCode: "AIDS305",
+      classroom: "Room 408",
+    },
+    {
+      id: "TT006",
+      dayOfWeek: ["Friday"],
+      startTime: "9:00",
+      endTime: "10:40",
+      classId: "C001",
+      subjectCode: "AIDS305",
+      classroom: "Room 408",
+    },
+    {
+      id: "TT006",
+      dayOfWeek: ["Monday"],
+      startTime: "10:40",
+      endTime: "12:20",
+      classId: "C002",
+      subjectCode: "AIDS305",
+      classroom: "Room 408",
+    },
+    {
+      id: "TT007",
+      dayOfWeek: ["Friday"],
+      startTime: "12:20",
+      endTime: "2:00",
+      classId: "C002",
+      subjectCode: "AIDS305",
+      classroom: "Room 408",
+    },
+  ],
 };
 
 const mockClassDetails: Record<string, ClassDetails> = {
-  C001: { id: "C001", branch: "CSE", batchStart: 2022, batchEnd: 2026, section: "A" },
-  C002: { id: "C002", branch: "CSE", batchStart: 2023, batchEnd: 2027, section: "B" },
-  C003: { id: "C003", branch: "CSE", batchStart: 2022, batchEnd: 2026, section: "C" }
+  C001: {
+    id: "C001",
+    branch: "AIDS",
+    batchStart: 2023,
+    batchEnd: 2027,
+    section: "A",
+  },
+  C002: {
+    id: "C002",
+    branch: "AIDS",
+    batchStart: 2023,
+    batchEnd: 2027,
+    section: "B",
+  },
 };
 
-// ================= COMPONENT =================
+// Calculate total weekly hours
+// helper: parse "h:mm" or "hh:mm" or with optional AM/PM -> minutes since 00:00 (0..1439)
+function parseTimeToMinutes(time: string): number {
+  const t = time.trim();
+  const ampmMatch = t.match(/(am|pm)$/i);
+  let base = t;
+  let isPM: boolean | null = null;
+
+  if (ampmMatch) {
+    isPM = ampmMatch[0].toLowerCase() === "pm";
+    base = t.replace(/(am|pm)$/i, "").trim();
+  }
+
+  const [hStr, mStr] = base.split(":");
+  let h = Number(hStr);
+  const m = Number(mStr || 0);
+
+  // Normalize hour if AM/PM present
+  if (isPM !== null) {
+    if (isPM && h !== 12) h += 12;
+    if (!isPM && h === 12) h = 0;
+  }
+
+  return h * 60 + m;
+}
+
+// compute total weekly minutes from a timetable array
+function computeTotalWeeklyMinutes(timetable: TimetableEntry[]) {
+  return timetable.reduce((total, entry) => {
+    const startMinutes = parseTimeToMinutes(entry.startTime);
+    let endMinutes = parseTimeToMinutes(entry.endTime);
+
+    // If end is earlier or equal, assume it's in the next 12-hour block (e.g. 12:20 -> 1:10 means 13:10)
+    if (endMinutes <= startMinutes) {
+      endMinutes += 12 * 60;
+    }
+
+    const durationMinutes = endMinutes - startMinutes;
+    // guard: prevent negative or weird durations
+    const safeDuration = Math.max(0, durationMinutes);
+
+    return total + safeDuration * entry.dayOfWeek.length;
+  }, 0);
+}
+
+// format minutes to "H h M m" and decimal hours
+function formatMinutes(minutesTotal: number) {
+  const hours = Math.floor(minutesTotal / 60);
+  const minutes = Math.round(minutesTotal % 60);
+  const decimalHours = minutesTotal / 60;
+  return { text: `${hours}h ${minutes}m`, decimal: decimalHours.toFixed(1) };
+}
+
+// after teacherData is set (e.g. right in the render part)
+const totalWeeklyMinutes = computeTotalWeeklyMinutes(mockTeacherData.timetable);
+const formatted = formatMinutes(totalWeeklyMinutes);
 
 export default function TeacherDashboard() {
   const router = useRouter();
@@ -115,6 +243,16 @@ export default function TeacherDashboard() {
   const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDay, setCurrentDay] = useState("");
+
+  const handleLogout = async () => {
+    try {
+      await signOut(getAuth());
+      setCurrentUser(null);
+      router.replace("/");
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -137,7 +275,15 @@ export default function TeacherDashboard() {
 
       setTeacherData(mockTeacherData);
 
-      const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const days = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
       const today = days[new Date().getDay()];
       setCurrentDay(today);
 
@@ -146,7 +292,9 @@ export default function TeacherDashboard() {
         .filter((entry) => entry.dayOfWeek.includes(today))
         .map((entry) => ({
           ...entry,
-          subject: mockTeacherData.subjects.find((s) => s.code === entry.subjectCode),
+          subject: mockTeacherData.subjects.find(
+            (s) => s.code === entry.subjectCode
+          ),
           classDetails: mockClassDetails[entry.classId],
         }))
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -159,7 +307,11 @@ export default function TeacherDashboard() {
     }
   };
 
-  const handleTakeAttendance = (classId: string, subjectCode: string, timetableId: string) => {
+  const handleTakeAttendance = (
+    classId: string,
+    subjectCode: string,
+    timetableId: string
+  ) => {
     router.push(`/attendance/${timetableId}/${classId}/${subjectCode}`);
   };
 
@@ -180,7 +332,9 @@ export default function TeacherDashboard() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h2>
+          <h2 className="text-2xl font-bold text-red-600 mb-2">
+            Access Denied
+          </h2>
           <p className="text-gray-600">Please log in to view your dashboard.</p>
         </div>
       </div>
@@ -198,11 +352,19 @@ export default function TeacherDashboard() {
                 <User className="w-8 h-8 text-indigo-600" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">{teacherData.name}</h1>
-                <p className="text-gray-600 mt-1">Teacher ID: {teacherData.id}</p>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  {teacherData.name}
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  Teacher ID: {teacherData.id}
+                </p>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right justify-right">
+              <div className="flex text-right w-full gap-2 text-gray-700 mb-2 cursor-pointer" onClick={handleLogout}>
+                <LogOut className="w-4 h-4"/>
+                <span className="text-sm">Logout</span>
+              </div>
               <div className="flex items-center gap-2 text-gray-700 mb-2">
                 <Mail className="w-4 h-4" />
                 <span className="text-sm">{teacherData.officialEmail}</span>
@@ -216,7 +378,9 @@ export default function TeacherDashboard() {
 
           {/* Subjects */}
           <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Subjects Teaching</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">
+              Subjects Teaching
+            </h3>
             <div className="flex flex-wrap gap-3">
               {teacherData.subjects.map((subject) => (
                 <div
@@ -237,14 +401,20 @@ export default function TeacherDashboard() {
         <div className="bg-white rounded-xl shadow-lg p-6">
           <div className="flex items-center gap-3 mb-6">
             <Calendar className="w-7 h-7 text-indigo-600" />
-            <h2 className="text-2xl font-bold text-gray-900">Today&apos;s Schedule</h2>
-            <span className="ml-auto text-lg font-semibold text-indigo-600">{currentDay}</span>
+            <h2 className="text-2xl font-bold text-gray-900">
+              Today&apos;s Schedule
+            </h2>
+            <span className="ml-auto text-lg font-semibold text-indigo-600">
+              {currentDay}
+            </span>
           </div>
 
           {todayClasses.length === 0 ? (
             <div className="text-center py-12">
               <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-xl text-gray-500">No classes scheduled for today</p>
+              <p className="text-xl text-gray-500">
+                No classes scheduled for today
+              </p>
               <p className="text-gray-400 mt-2">Enjoy your day off!</p>
             </div>
           ) : (
@@ -276,7 +446,9 @@ export default function TeacherDashboard() {
                       </h3>
 
                       <div className="flex items-center gap-4 text-gray-600">
-                        <span className="font-medium">{classItem.subject?.code}</span>
+                        <span className="font-medium">
+                          {classItem.subject?.code}
+                        </span>
                         <span>•</span>
                         <span>
                           {classItem.classDetails?.branch} - Section{" "}
@@ -292,7 +464,11 @@ export default function TeacherDashboard() {
 
                     <button
                       onClick={() =>
-                        handleTakeAttendance(classItem.classId, classItem.subjectCode, classItem.id)
+                        handleTakeAttendance(
+                          classItem.classId,
+                          classItem.subjectCode,
+                          classItem.id
+                        )
                       }
                       className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
                     >
@@ -314,7 +490,9 @@ export default function TeacherDashboard() {
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Total Subjects</p>
-                <p className="text-2xl font-bold text-gray-900">{teacherData.subjects.length}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {teacherData.subjects.length}
+                </p>
               </div>
             </div>
           </div>
@@ -326,7 +504,9 @@ export default function TeacherDashboard() {
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Today&apos;s Classes</p>
-                <p className="text-2xl font-bold text-gray-900">{todayClasses.length}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {todayClasses.length}
+                </p>
               </div>
             </div>
           </div>
@@ -338,7 +518,11 @@ export default function TeacherDashboard() {
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Total Weekly Hours</p>
-                <p className="text-2xl font-bold text-gray-900">{teacherData.timetable.length}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatted.text} {/* e.g. "14h 10m" */}
+                </p>
+                {/* optional: show decimal */}
+                <p className="text-sm text-gray-500">{formatted.decimal} hrs</p>
               </div>
             </div>
           </div>
