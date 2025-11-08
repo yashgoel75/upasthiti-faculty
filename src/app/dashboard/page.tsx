@@ -242,7 +242,7 @@ export default function TeacherDashboard() {
   const [teacherData, setTeacherData] = useState<Teacher | null>(null);
   const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentDay, setCurrentDay] = useState("");
+  const [currentDay, setCurrentDay] = useState("Monday");
 
   const handleLogout = async () => {
     try {
@@ -284,12 +284,12 @@ export default function TeacherDashboard() {
         "Friday",
         "Saturday",
       ];
-      const today = days[new Date().getDay()];
-      setCurrentDay(today);
+      // const today = days[new Date().getDay()];
+      // setCurrentDay(today);
 
       // Build today's schedule
       const todaysSchedule: TodayClass[] = mockTeacherData.timetable
-        .filter((entry) => entry.dayOfWeek.includes(today))
+        .filter((entry) => entry.dayOfWeek.includes("Monday"))
         .map((entry) => ({
           ...entry,
           subject: mockTeacherData.subjects.find(
